@@ -10,7 +10,7 @@ const server = http.createServer(app);
 
 // Enable CORS for the frontend URL
 const corsOptions = {
-    origin: ['http://localhost:3000'], // Adjust to your Vercel/production URL later
+    origin: ['http://localhost:3000', 'https://glint-livid-pi.vercel.app'],
     methods: ['GET', 'POST'],
     credentials: true
 };
