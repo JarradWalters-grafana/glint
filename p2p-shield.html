@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Goblin Card Game (P2P)</title>
+    <!-- Trystero core + Nostr transport (ES module approach) -->
+    <script type="module">
+        import { joinRoom, selfId } from 'https://esm.sh/trystero@0.20.0/nostr';
+        window.Trystero = { joinRoom, selfId };
+        window.__trysteroLoaded = true;
+        console.log('Trystero loaded successfully, selfId:', selfId);
+    </script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #eee;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1, h2, h3 {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            color: #f4a261;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        /* Setup Screen */
+        .setup-screen {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 500px;
+            margin: 50px auto;
+        }
+
+        .setup-group {
+            margin-bottom: 20px;
+        }
+
+        .setup-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #e9c46a;
+        }
+
+        .setup-group input, .setup-group select {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            background: rgba(255,255,255,0.9);
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #e9c46a;
+            color: #1a1a2e;
+        }
+
+        .btn-primary:hover {
+            background: #f4a261;
+            transform: scale(1.05);
+        }
+
+        .btn-secondary {
+            background: #2a9d8f;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #264653;
+        }
+
+        .btn-danger {
+            background: #e76f51;
+            color: white;
+        }
+
+        .btn-trick {
+            background: #9b5de5;
+            color: white;
+        }
+
+        /* Instructions Modal */
+        .instructions-content {
+            max-height: 60vh;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+
+        .instructions-content h3 {
+            color: #e9c46a;
+            margin: 20px 0 10px 0;
+        }
+
+        .trick-card-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .trick-card-item {
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .trick-card-item .mini-card {
+            width: 40px;
+            height: 55px;
+            background: linear-gradient(145deg, #9b5de5, #7b3cb8);
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 8px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .trick-card-item .mini-card.pre {
+            background: linear-gradient(145deg, #f4a261, #e9c46a);
+            color: #1a1a2e;
+        }
+
+        .phase-badge {
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-top: 3px;
+            display: inline-block;
+        }
+
+        .phase-badge.pre {
+            background: #f4a261;
+            color: #1a1a2e;
+        }
+
+        .phase-badge.during {
+            background: #9b5de5;
+            color: white;
+        }
+
+        /* Game Board */
+        .game-board {
+            display: none;
+        }
+
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            width: 60px;
+            height: 80px;
+            background: linear-gradient(145deg, #f4a261, #e9c46a);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            font-weight: bold;
+            color: #1a1a2e;
+            box-shadow: 3px 3px 10px rgba(0,0,0,0.3);
+        }
+
+        .card.face-down {
+            background: linear-gradient(145deg, #264653, #2a9d8f);
+            color: transparent;
+            text-shadow: none;
+        }
+
+        .card.face-down::after {
+            content: 'G';
+            color: rgba(255,255,255,0.2);
+            font-size: 40px;
+        }
+
+        .timer {
+            font-size: 48px;
+            font-weight: bold;
+            color: #e76f51;
+            font-family: 'Courier New', monospace;
+        }
+
+        .timer.warning {
+            color: #f4a261;
+            animation: pulse 0.5s infinite;
+        }
+
+        .timer.trick-phase {
+            color: #f4a261;
+        }
+
+        .timer.solve-phase {
+            color: #9b5de5;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .phase-indicator {
+            background: #f4a261;
+            color: #1a1a2e;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .phase-indicator.solve {
+            background: #9b5de5;
+            color: white;
+        }
+
+        /* Submission Zone */
+        .submission-zone {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .submission-slots {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .submission-slot {
+            width: 120px;
+            height: 60px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed rgba(255,255,255,0.2);
+            font-weight: bold;
+        }
+
+        .submission-slot.filled {
+            border: 2px solid;
+        }
+
+        /* Players Area */
+        .players-area {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .player-card {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 20px;
+            border: 3px solid transparent;
+        }
+
+        .player-card.active {
+            border-color: #e9c46a;
+        }
+
+        .player-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .player-color-dot {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+
+        .player-cards {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+
+        .trick-cards-hand {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .trick-card {
+            width: 80px;
+            height: 50px;
+            background: #9b5de5;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            cursor: pointer;
+            text-align: center;
+            padding: 5px;
+        }
+
+        .trick-card.pre-round {
+            background: #f4a261;
+            color: #1a1a2e;
+        }
+
+        .trick-card.opponent-trick {
+            background: #444;
+            color: #888;
+            cursor: default;
+        }
+
+        .shield-alert {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(231, 111, 81, 0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+            z-index: 2000;
+            display: none;
+            border: 4px solid #e9c46a;
+        }
+
+        /* Modals */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal {
+            background: #1a1a2e;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .score-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .score-table td {
+            padding: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Goblin Card Game</h1>
+
+        <!-- Setup Screen -->
+        <div id="setupScreen" class="setup-screen">
+            <h2>P2P Game Setup</h2>
+
+            <div class="setup-group">
+                <label>Room ID (share this with friends)</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="roomId" placeholder="goblin-secret-room">
+                    <button class="btn btn-secondary" onclick="generateRoomId()">Random</button>
+                </div>
+            </div>
+
+            <div class="setup-group">
+                <label>Your Name</label>
+                <input type="text" id="playerName" placeholder="Enter your name">
+            </div>
+
+            <hr style="margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.1);">
+
+            <div id="hostSettings" style="display: none;">
+                <h3>Host Settings</h3>
+                <div class="setup-group">
+                    <label>Solve Phase Timer (seconds)</label>
+                    <input type="number" id="timerDuration" value="60" min="0" max="300">
+                </div>
+                <div class="setup-group">
+                    <label>Trick Phase Timer (seconds)</label>
+                    <input type="number" id="trickPhaseDuration" value="10" min="0" max="60">
+                </div>
+                <div class="setup-group">
+                    <label>Winning Score</label>
+                    <input type="number" id="winningScore" value="21" min="1" max="100">
+                </div>
+                <div class="setup-group">
+                    <label>Redraws per player</label>
+                    <input type="number" id="redrawCount" value="5" min="0" max="20">
+                </div>
+            </div>
+
+            <div id="connectionStatus" style="text-align: center; margin-bottom: 15px; display: none;">
+                <span id="statusText">Connecting...</span>
+                <div id="peerCount">Players: 1</div>
+                <div id="debugLog" style="font-size: 10px; color: #888; margin-top: 10px; text-align: left; max-height: 100px; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 5px; border-radius: 4px;"></div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button class="btn btn-info" onclick="showInstructions()" style="flex: 1;">How to Play</button>
+                <button id="joinBtn" class="btn btn-primary" onclick="joinRoom()" style="flex: 1;">Join Room</button>
+                <button id="startBtn" class="btn btn-primary hidden" onclick="startGame()" style="flex: 1;">Start Game</button>
+            </div>
+        </div>
+
+        <!-- Game Board -->
+        <div id="gameBoard" class="game-board">
+            <div class="game-header">
+                <div class="target-display">
+                    <h3>Target</h3>
+                    <div class="target-cards" id="targetCards" style="display: flex; gap: 10px;"></div>
+                </div>
+
+                <div class="timer-display" id="timerDisplay">
+                    <div class="timer" id="timer">60</div>
+                    <div class="phase-indicator solve" id="phaseIndicator">SOLVE PHASE</div>
+                </div>
+
+                <div class="round-info">
+                    <h3 id="roundDisplay">Round 1</h3>
+                </div>
+            </div>
+
+            <div class="submission-zone">
+                <h3>Submission Zone</h3>
+                <div class="submission-slots" id="submissionSlots"></div>
+            </div>
+
+            <div class="players-area" id="playersArea"></div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="submitModal" class="modal-overlay">
+        <div class="modal">
+            <h2>Submit Answer</h2>
+            <input type="number" id="answerInput" style="width: 100%; padding: 10px; font-size: 20px;">
+            <button class="btn btn-primary" onclick="submitAnswer()" style="margin-top: 10px; width: 100%;">Submit</button>
+        </div>
+    </div>
+
+    <div id="trickModal" class="modal-overlay">
+        <div class="modal">
+            <h2>Play Trick</h2>
+            <button class="btn btn-primary" onclick="playTrickCard()" style="width: 100%;">Confirm Trick</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('trickModal').style.display='none'" style="margin-top: 10px; width: 100%;">Cancel</button>
+        </div>
+    </div>
+
+    <div id="instructionsModal" class="modal-overlay">
+        <div class="modal">
+            <h2>How to Play</h2>
+            <div class="instructions-content" id="instructionsContent">
+                <h3>The Goal</h3>
+                <p>Calculate an answer as close to the <strong>Target</strong> as possible using your <strong>3 cards</strong> and any math operators.</p>
+                
+                <h3>Phase 1: Trick Phase</h3>
+                <p>Cards are face-down. Use this time to prepare:</p>
+                <ul>
+                    <li><strong>Play Tricks</strong>: Use pre-round (*) cards to mess with the target or set scoring rules.</li>
+                    <li><strong>Scout (1 🔄)</strong>: Spend a Redraw to see your own cards early.</li>
+                    <li><strong>Spy (1 🔄)</strong>: Spend a Redraw to see an opponent's cards.</li>
+                </ul>
+
+                <h3>Phase 2: Solve Phase</h3>
+                <p>Cards are revealed! Work fast to submit:</p>
+                <ul>
+                    <li><strong>Redraw</strong>: Spend remaining tokens to get new cards.</li>
+                    <li><strong>Play Tricks</strong>: Use during-round (!) cards anytime.</li>
+                    <li><strong>Submit</strong>: Enter your final answer. Fastest solver with points gets a +1 speed bonus!</li>
+                </ul>
+
+                <h3>Defensive Play: The Shield 🛡️</h3>
+                <p>If you hold a <strong>Goblin Shield</strong>, you'll get a 3-second window to <strong>Deflect</strong> offensive tricks played by opponents. Act fast to save the round!</p>
+
+                <h3>Scoring</h3>
+                <p>Exactly on: 3pts | Within 5: 2pts | Within 10: 1pt | 11+ away: 0pts</p>
+            </div>
+            <button class="btn btn-primary" onclick="closeInstructions()" style="margin-top: 10px; width: 100%;">Close</button>
+        </div>
+    </div>
+
+    <div id="summaryModal" class="modal-overlay">
+        <div class="modal">
+            <h2>Round Summary</h2>
+            <div id="roundSummary"></div>
+            <button class="btn btn-primary" onclick="nextRound()" id="nextRoundBtn" style="margin-top: 10px; width: 100%;">Next Round</button>
+        </div>
+    </div>
+
+    <div id="shieldAlert" class="shield-alert">
+        <h2>⚠️ TARGETED! ⚠️</h2>
+        <p id="shieldReason">Someone is playing a trick on you!</p>
+        <button class="btn btn-primary" onclick="useShield()" style="margin-top: 20px; font-size: 24px; width: 100%;">ACTIVATE SHIELD 🛡️</button>
+        <div id="shieldTimer" style="font-size: 14px; margin-top: 10px; color: #eee;">Window closing in 3s...</div>
+    </div>
+
+    <script>
+        // Global Error Catcher
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            log(`ERROR: ${msg} (line ${lineNo})`);
+            return false;
+        };
+
+        function log(msg) {
+            console.log(msg);
+            const logEl = document.getElementById('debugLog');
+            if (logEl) {
+                logEl.innerHTML += `<div>${new Date().toLocaleTimeString()}: ${msg}</div>`;
+                logEl.scrollTop = logEl.scrollHeight;
+            }
+        }
+
+        let room, isHost = false, peers = {}, myId;
+        let sendGameState, getGameState, sendAction, getAction, sendTrick, getTrick, sendSubmit, getSubmit, sendTimer, getTimer, sendNewRound, getNewRound;
+
+        // Trystero loaded via ES module - check for our flag
+        const getTrystero = () => {
+            if (window.__trysteroLoaded && window.Trystero && typeof window.Trystero.joinRoom === 'function' && window.Trystero.selfId) {
+                return window.Trystero;
+            }
+            return null;
+        };
+
+        const PLAYER_COLORS = [
+            { name: 'red', hex: '#e76f51' }, { name: 'blue', hex: '#457b9d' },
+            { name: 'yellow', hex: '#e9c46a' }, { name: 'green', hex: '#2a9d8f' },
+            { name: 'purple', hex: '#9b5de5' }, { name: 'pink', hex: '#f15bb5' }
+        ];
+
+        const TRICK_CARDS = [
+            // Pre-Round (*)
+            { id: 'target_flip', name: 'Target Flip', icon: '🔄', phase: 'pre', description: 'Swap tens and ones digits' },
+            { id: 'goblin_tax', name: 'Goblin Tax', icon: '💰', phase: 'pre', description: 'Target -10' },
+            { id: 'moving_target', name: 'Moving Target', icon: '🎯', phase: 'pre', description: 'Add random 0-9 to target' },
+            { id: 'near_sighted', name: 'Near-Sighted', icon: '👁️', phase: 'pre', description: 'Hide ones digit from opponents' },
+            { id: 'golf_rules', name: 'Golf Rules', icon: '⛳', phase: 'pre', description: 'Furthest gets 3pts, closest 1pt' },
+            { id: 'double_nothing', name: 'Double/Nothing', icon: '✖️', phase: 'pre', description: 'All points doubled this round' },
+            
+            // During-Round (!)
+            { id: 'goblin_hoard', name: 'Goblin Hoard', icon: '📦', phase: 'during', description: 'Get +1 card (4 total)' },
+            { id: 'goblin_logic', name: 'Goblin Logic', icon: '🃏', phase: 'during', description: 'One card is wildcard (0-9)' },
+            { id: 'brain_freeze', name: 'Brain Freeze', icon: '🥶', phase: 'during', description: 'Target player loses 10s' },
+            { id: 'sticky_fingers', name: 'Sticky Fingers', icon: '👆', phase: 'during', description: 'Swap card with opponent' },
+            { id: 'odd_even_curse', name: 'Odd/Even Curse', icon: '🔢', phase: 'during', description: 'Replace all odd/even cards' },
+            { id: 'panic_attack', name: 'Panic Attack', icon: '⚡', phase: 'during', description: 'Cut remaining timer in half' },
+            { id: 'slowpoke_bonus', name: 'Slowpoke Bonus', icon: '🐌', phase: 'during', description: 'Last submit gets speed bonus' },
+            { id: 'time_extension', name: 'Time Extension', icon: '⏰', phase: 'during', description: 'Add 30s to timer' },
+            { id: 'goblin_shield', name: 'Goblin Shield', icon: '🛡️', phase: 'passive', description: 'Deflect any offensive trick targeting you' }
+        ];
+
+        let gameState = {
+            players: [], target: 0, targetCards: [0,0], currentRound: 1,
+            timer: 60, phase: 'pre', trickTimeRemaining: 10, submissions: [],
+            winningScore: 21, settings: {}
+        };
+        let scoutedSelf = false;
+        let spiedPlayers = new Set();
+
+        function generateRoomId() {
+            document.getElementById('roomId').value = 'goblin-' + Math.floor(Math.random() * 10000);
+        }
+
+        async function joinRoom() {
+            const roomId = document.getElementById('roomId').value.trim();
+            const playerName = document.getElementById('playerName').value.trim();
+            if (!roomId || !playerName) return alert('Enter Room ID and Name');
+
+            // Wait a moment for library to load if needed
+            let t = getTrystero();
+            let attempts = 0;
+            while (!t && attempts < 10) {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                t = getTrystero();
+                attempts++;
+                log(`Waiting for Trystero to load... attempt ${attempts}`);
+            }
+
+            if (!t) {
+                log('CRITICAL: Trystero library not found! Check your internet/script tag.');
+                log('Available window globals with "tryst" in name: ' + JSON.stringify(Object.keys(window).filter(k => k.toLowerCase().includes('tryst'))));
+                return alert('Networking library failed to load. Check browser console for details.');
+            }
+
+            document.getElementById('joinBtn').disabled = true;
+            document.getElementById('connectionStatus').style.display = 'block';
+            log(`Attempting to join room: ${roomId}`);
+            log(`My Peer ID: ${t.selfId}`);
+
+            try {
+                room = t.joinRoom({appId: 'goblin-card-game-p2p-v3'}, roomId);
+                
+                [sendGameState, getGameState] = room.makeAction('gameState');
+                [sendAction, getAction] = room.makeAction('gameAction');
+                [sendTrick, getTrick] = room.makeAction('playTrick');
+                [sendSubmit, getSubmit] = room.makeAction('submitAnswer');
+                [sendTimer, getTimer] = room.makeAction('timerUpdate');
+                [sendNewRound, getNewRound] = room.makeAction('newRound');
+                const [sendRedraw, getRedraw] = room.makeAction('redrawCards');
+                window._sendRedraw = sendRedraw;
+                const [sendShield, getShield] = room.makeAction('playShield');
+                window._sendShield = sendShield;
+
+                room.onPeerJoin(peerId => {
+                    log('PEER JOINED: ' + peerId);
+                    if (isHost) {
+                        log('I am host, sending current state to new peer');
+                        sendGameState({state: gameState}, peerId);
+                    }
+                    updatePeerDisplay();
+                    checkHostStatus();
+                });
+
+                room.onPeerLeave(peerId => {
+                    log('PEER LEFT: ' + peerId);
+                    updatePeerDisplay();
+                    checkHostStatus();
+                });
+
+                getGameState(data => { log('State sync received'); gameState = data.state; updateDisplay(); });
+                
+                getAction(data => {
+                    log('Action received: ' + data.type);
+                    if (data.type === 'start') startLocalGame(data.settings, data.allPlayers);
+                    if (data.type === 'nextRound') { gameState.currentRound++; document.getElementById('summaryModal').style.display = 'none'; }
+                });
+
+                getNewRound(data => { log('New round data received'); applyNewRound(data); });
+                getRedraw(data => {
+                    log('Redraw received from player ' + data.playerId);
+                    const p = gameState.players.find(pl => pl.id === data.playerId);
+                    if (p) { p.cards = data.newCards; p.redraws = data.remainingRedraws; updateDisplay(); }
+                });
+                getShield(data => {
+                    log('Shield activated by player ' + data.playerId);
+                    const p = gameState.players.find(pl => pl.id === data.playerId);
+                    if (p) { p.isShielded = true; log(`Player ${p.name} IS SHIELDED!`); }
+                });
+
+                getTrick(data => { log('Trick received'); applyTrickEffect(data.trickCard, data.playerIndex); updateDisplay(); });
+
+                getSubmit(data => {
+                    log('Submit received from player ' + data.playerId);
+                    const p = gameState.players.find(pl => pl.id === data.playerId);
+                    p.submitted = true; p.answer = data.answer; p.distance = data.distance;
+                    gameState.submissions.push({playerId: data.playerId, answer: data.answer, distance: data.distance, timestamp: data.timestamp});
+                    updateDisplay();
+                    if (gameState.submissions.length >= gameState.players.length) endRound();
+                });
+
+                getTimer(data => {
+                    if (!isHost) {
+                        const phaseChanged = gameState.phase !== data.phase;
+                        gameState.timer = data.timer;
+                        gameState.trickTimeRemaining = data.trickTimeRemaining;
+                        gameState.phase = data.phase;
+                        updateTimerDisplay();
+                        if (phaseChanged) updateDisplay();
+                    }
+                });
+
+                log('Room joined successfully. Waiting for peers...');
+                setInterval(checkHostStatus, 2000);
+                updatePeerDisplay();
+
+            } catch (err) {
+                log('JOIN ERROR: ' + err.message);
+            }
+        }
+
+        function checkHostStatus() {
+            if (!room) return;
+            const t = getTrystero();
+            if (!t || !t.selfId) return;
+            const allPeers = Object.keys(room.getPeers());
+            const sorted = [t.selfId, ...allPeers].sort();
+            const newIsHost = sorted[0] === t.selfId;
+            
+            log(`Host Check: MyID=${t.selfId}, AllIDs=[${sorted.join(', ')}], newIsHost=${newIsHost}`);
+            
+            if (newIsHost !== isHost) {
+                isHost = newIsHost;
+                log('Host status changed: ' + (isHost ? 'YOU ARE HOST' : 'YOU ARE PEER'));
+                document.getElementById('hostSettings').style.display = isHost ? 'block' : 'none';
+                document.getElementById('startBtn').classList.toggle('hidden', !isHost);
+                document.getElementById('statusText').textContent = isHost ? 'You are Host' : 'Connected';
+            }
+        }
+
+        function updatePeerDisplay() {
+            if (!room) return;
+            const count = Object.keys(room.getPeers()).length + 1;
+            document.getElementById('peerCount').textContent = 'Players in room: ' + count;
+        }
+
+        function startGame() {
+            const t = getTrystero();
+            const allPeerIds = [t.selfId, ...Object.keys(room.getPeers())].sort();
+            log('Starting game with peers: ' + allPeerIds.join(', '));
+            
+            const allPlayers = allPeerIds.map((id, index) => ({
+                id: index, p2pId: id,
+                name: id === t.selfId ? document.getElementById('playerName').value : 'Player ' + (index+1),
+                color: PLAYER_COLORS[index % PLAYER_COLORS.length]
+            }));
+            const settings = { 
+                timerDuration: parseInt(document.getElementById('timerDuration').value), 
+                trickPhaseDuration: parseInt(document.getElementById('trickPhaseDuration').value),
+                winningScore: parseInt(document.getElementById('winningScore').value),
+                redrawCount: parseInt(document.getElementById('redrawCount').value)
+            };
+            sendAction({type: 'start', settings, allPlayers});
+            startLocalGame(settings, allPlayers);
+        }
+
+        function startLocalGame(settings, allPlayers) {
+            gameState.players = allPlayers.map(p => ({ ...p, score: 0, trickCards: drawRandomTricks(2), redraws: settings.redrawCount, cards: [] }));
+            gameState.winningScore = settings.winningScore;
+            gameState.settings = settings;
+            gameState.trickTimeRemaining = settings.trickPhaseDuration;
+            document.getElementById('setupScreen').style.display = 'none';
+            document.getElementById('gameBoard').style.display = 'block';
+            if (isHost) startNewRound();
+        }
+
+        function drawRandomTricks(count) {
+            return [...TRICK_CARDS].sort(() => Math.random() - 0.5).slice(0, count).map(c => ({...c, uid: Math.random()}));
+        }
+
+        function startNewRound() {
+            log('Host: Starting new round');
+            gameState.trickTimeRemaining = gameState.settings.trickPhaseDuration || 10;
+            const data = {
+                target: Math.floor(Math.random() * 100),
+                playerHands: gameState.players.map(() => [Math.floor(Math.random()*10), Math.floor(Math.random()*10), Math.floor(Math.random()*10)])
+            };
+            data.targetCards = [Math.floor(data.target / 10), data.target % 10];
+            sendNewRound(data);
+            applyNewRound(data);
+        }
+
+        function applyNewRound(data) {
+            gameState.target = data.target;
+            gameState.targetCards = data.targetCards;
+            gameState.submissions = [];
+            gameState.players.forEach((p, i) => { p.cards = data.playerHands[i]; p.submitted = false; });
+            gameState.phase = 'pre';
+            gameState.trickTimeRemaining = gameState.settings.trickPhaseDuration || 10;
+            scoutedSelf = false;
+            spiedPlayers = new Set();
+            updateDisplay();
+            if (isHost) startTrickTimer();
+        }
+
+        function startTrickTimer() {
+            const itv = setInterval(() => {
+                gameState.trickTimeRemaining--;
+                sendTimer({timer: gameState.timer, trickTimeRemaining: gameState.trickTimeRemaining, phase: gameState.phase});
+                updateTimerDisplay();
+                if (gameState.trickTimeRemaining <= 0) { clearInterval(itv); startSolvePhase(); }
+            }, 1000);
+        }
+
+        function startSolvePhase() {
+            gameState.phase = 'during';
+            gameState.timer = gameState.settings.timerDuration;
+            updateDisplay();
+            const itv = setInterval(() => {
+                gameState.timer--;
+                sendTimer({timer: gameState.timer, trickTimeRemaining: gameState.trickTimeRemaining, phase: gameState.phase});
+                updateTimerDisplay();
+                if (gameState.timer <= 0 || gameState.submissions.length >= gameState.players.length) { clearInterval(itv); endRound(); }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const t = document.getElementById('timer'), p = document.getElementById('phaseIndicator');
+            if (gameState.phase === 'pre') { t.textContent = gameState.trickTimeRemaining; p.textContent = 'TRICK PHASE'; p.className = 'phase-indicator'; }
+            else { t.textContent = gameState.timer; p.textContent = 'SOLVE PHASE'; p.className = 'phase-indicator solve'; }
+        }
+
+        function updateDisplay() {
+            const t = getTrystero();
+            if (!t) return;
+            const myIdx = gameState.players.findIndex(pl => pl.p2pId === t.selfId);
+            document.getElementById('targetCards').innerHTML = gameState.targetCards.map(c => `<div class="card">${c}</div>`).join('');
+            document.getElementById('roundDisplay').textContent = 'Round ' + gameState.currentRound;
+            
+            let html = '';
+            gameState.players.forEach((p, i) => {
+                const isMe = p.p2pId === t.selfId;
+                const isSpied = spiedPlayers.has(p.id);
+                const showCards = (isMe && (gameState.phase !== 'pre' || scoutedSelf)) || (!isMe && (gameState.phase !== 'pre' || isSpied));
+                
+                html += `<div class="player-card ${isMe ? 'active' : ''}">
+                    <div class="player-header">
+                        <span class="player-color-dot" style="background:${p.color.hex}"></span>
+                        ${p.name}: ${p.score} 
+                        ${p.redraws !== undefined ? `<span style="font-size: 12px; color: #888;">(Redraws: ${p.redraws})</span>` : ''}
+                    </div>
+                    <div class="player-cards">${p.cards.map(c => `<div class="card ${!showCards ? 'face-down' : ''}">${showCards ? c : ''}</div>`).join('')}</div>
+                    <div class="trick-cards-hand">${p.trickCards.map(tc => {
+                        const cardName = isMe ? tc.name : 'Trick Card';
+                        const cardIcon = isMe ? tc.icon : '❓';
+                        const cardDesc = isMe ? tc.description : 'Hidden opponent card';
+                        return `<div class="trick-card ${tc.phase==='pre'?'pre-round':''} ${!isMe ? 'opponent-trick' : ''}" 
+                                     title="${cardDesc}"
+                                     onclick="${isMe ? `openTrickModal(${i},${tc.uid})` : ''}">
+                                    ${cardIcon}<br>${cardName}
+                                </div>`;
+                    }).join('')}</div>
+                    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <button class="btn btn-secondary" onclick="openSubmitModal(${i})" ${!isMe || p.submitted || gameState.phase === 'pre' ? 'disabled' : ''} style="flex: 2;">Submit</button>
+                        
+                        ${isMe && gameState.phase === 'pre' && !scoutedSelf ? 
+                            `<button class="btn btn-trick" onclick="scoutHand()" ${p.redraws <= 0 ? 'disabled' : ''} style="flex: 1; padding: 5px; font-size: 11px;">Scout (1 🔄)</button>` : ''}
+                        
+                        ${!isMe && gameState.phase === 'pre' && !isSpied ? 
+                            `<button class="btn btn-trick" onclick="spyOnPlayer(${i})" ${gameState.players[myIdx].redraws <= 0 ? 'disabled' : ''} style="flex: 1; padding: 5px; font-size: 11px;">Spy (1 🔄)</button>` : ''}
+
+                        ${isMe && gameState.phase === 'during' ? 
+                            `<button class="btn btn-danger" onclick="redrawCards()" ${p.redraws <= 0 || p.submitted ? 'disabled' : ''} style="flex: 1; padding: 5px; font-size: 11px;">Redraw</button>` : ''}
+                    </div>
+                </div>`;
+            });
+            document.getElementById('playersArea').innerHTML = html;
+
+            let subHtml = '';
+            gameState.submissions.forEach(s => {
+                const p = gameState.players.find(pl => pl.id === s.playerId);
+                subHtml += `<div class="submission-slot filled" style="border-color:${p.color.hex}">${p.name.charAt(0)}: ${s.answer}</div>`;
+            });
+            document.getElementById('submissionSlots').innerHTML = subHtml;
+        }
+
+        function openSubmitModal(idx) {
+            if (gameState.phase !== 'during') return;
+            document.getElementById('submitModal').style.display = 'flex';
+        }
+
+        function submitAnswer() {
+            const val = parseInt(document.getElementById('answerInput').value);
+            const t = getTrystero();
+            const myIdx = gameState.players.findIndex(p => p.p2pId === t.selfId);
+            const p = gameState.players[myIdx];
+            const dist = Math.abs(val - gameState.target);
+            
+            const data = {playerId: p.id, answer: val, distance: dist, timestamp: Date.now()};
+            sendSubmit(data);
+            p.submitted = true; p.answer = val; p.distance = dist;
+            gameState.submissions.push(data);
+            document.getElementById('submitModal').style.display = 'none';
+            updateDisplay();
+            if (gameState.submissions.length >= gameState.players.length) endRound();
+        }
+
+        let selectedTrick;
+        function openTrickModal(pIdx, uid) {
+            selectedTrick = gameState.players[pIdx].trickCards.find(t => t.uid == uid);
+            if (selectedTrick.phase !== gameState.phase) return alert('Wrong phase!');
+            document.getElementById('trickModal').style.display = 'flex';
+        }
+
+        function playTrickCard() {
+            const t = getTrystero();
+            const myIdx = gameState.players.findIndex(p => p.p2pId === t.selfId);
+            sendTrick({trickCard: selectedTrick, playerIndex: myIdx});
+            applyTrickEffect(selectedTrick, myIdx);
+            gameState.players[myIdx].trickCards = gameState.players[myIdx].trickCards.filter(t => t.uid != selectedTrick.uid);
+            document.getElementById('trickModal').style.display = 'none';
+            updateDisplay();
+        }
+
+        function useShield() {
+            const t = getTrystero();
+            const myIdx = gameState.players.findIndex(p => p.p2pId === t.selfId);
+            const p = gameState.players[myIdx];
+
+            const shieldCard = p.trickCards.find(tc => tc.id === 'goblin_shield');
+            if (shieldCard) {
+                p.isShielded = true;
+                p.trickCards = p.trickCards.filter(tc => tc.uid !== shieldCard.uid);
+                window._sendShield({playerId: p.id});
+                log("SHIELD ACTIVATED!");
+                document.getElementById('shieldAlert').style.display = 'none';
+                updateDisplay();
+            }
+        }
+
+        function showShieldAlert(reason) {
+            const t = getTrystero();
+            const myIdx = gameState.players.findIndex(p => p.p2pId === t.selfId);
+            const p = gameState.players[myIdx];
+
+            if (!p.trickCards.some(tc => tc.id === 'goblin_shield')) return;
+
+            document.getElementById('shieldReason').textContent = reason;
+            document.getElementById('shieldAlert').style.display = 'block';
+            let timeLeft = 3;
+            const itv = setInterval(() => {
+                timeLeft--;
+                document.getElementById('shieldTimer').textContent = `Window closing in ${timeLeft}s...`;
+                if (timeLeft <= 0 || p.isShielded) {
+                    clearInterval(itv);
+                    document.getElementById('shieldAlert').style.display = 'none';
+                }
+            }, 1000);
+        }
+
+        async function applyTrickEffect(card, pIdx) {
+            log(`Applying trick: ${card.name} from player ${pIdx}`);
+            const offensiveCards = ['target_flip', 'goblin_tax', 'moving_target', 'near_sighted', 'brain_freeze', 'sticky_fingers', 'panic_attack'];
+
+            const isOffensive = offensiveCards.includes(card.id);
+            const t = getTrystero();
+            const myIdx = gameState.players.findIndex(p => p.p2pId === t.selfId);
+
+            // If I am being targeted by an offensive card from someone else
+            if (isOffensive && pIdx !== myIdx) {
+                // If it's a global effect or specifically targets me
+                // For simplicity, let's say "Brain Freeze" and "Sticky Fingers" target specifically, 
+                // while target changes affect everyone but are still "offensive" to the state.
+                showShieldAlert(`Opponent played ${card.name}!`);
+                // Wait for the shield window (3 seconds)
+                await new Promise(r => setTimeout(r, 3050));
+            }
+
+            // Check if anyone deflected it
+            // In this simple implementation, we'll check if the local player shielded
+            // A more robust version would check if the *target* shielded.
+            if (isOffensive) {
+                // If any player is shielded, the trick is deflected
+                const anyoneShielded = gameState.players.some(p => p.isShielded);
+                if (anyoneShielded) {
+                    log("TRICK DEFLECTED BY SHIELD!");
+                    gameState.players.forEach(p => p.isShielded = false); // Reset for next trick
+                    updateDisplay();
+                    return;
+                }
+            }
+
+            // Pre-Round Effects
+            if (card.id === 'target_flip') {
+                const t = gameState.target;
+                gameState.target = (t % 10) * 10 + Math.floor(t / 10);
+                gameState.targetCards = [Math.floor(gameState.target / 10), gameState.target % 10];
+            }
+            if (card.id === 'goblin_tax') {
+                gameState.target -= 10;
+                gameState.targetCards = [Math.floor(gameState.target / 10), gameState.target % 10];
+            }
+            if (card.id === 'moving_target') {
+                gameState.target += Math.floor(Math.random() * 10);
+                gameState.targetCards = [Math.floor(gameState.target / 10), gameState.target % 10];
+            }
+            if (card.id === 'near_sighted') {
+                gameState.targetCards[1] = '?'; // Visual only, gameState.target stays for calculation
+            }
+            if (card.id === 'golf_rules') {
+                gameState.golfRulesActive = true;
+            }
+            if (card.id === 'double_nothing') {
+                gameState.doublePointsActive = true;
+            }
+
+            // During-Round Effects
+            if (card.id === 'goblin_hoard') {
+                gameState.players[pIdx].cards.push(Math.floor(Math.random() * 10));
+            }
+            if (card.id === 'goblin_logic') {
+                gameState.players[pIdx].hasWildcard = true; // Player can treat any card as 0-9
+            }
+            if (card.id === 'brain_freeze') {
+                // In this simplified P2P, we just apply to all or specific? 
+                // Let's say it affects everyone ELSE for simplicity in this turn
+                if (gameState.players[pIdx].p2pId !== getTrystero().selfId) {
+                    gameState.timer = Math.max(0, gameState.timer - 10);
+                }
+            }
+            if (card.id === 'sticky_fingers') {
+                // Swap first card with the person to the right
+                const nextIdx = (pIdx + 1) % gameState.players.length;
+                const myCard = gameState.players[pIdx].cards[0];
+                gameState.players[pIdx].cards[0] = gameState.players[nextIdx].cards[0];
+                gameState.players[nextIdx].cards[0] = myCard;
+            }
+            if (card.id === 'odd_even_curse') {
+                gameState.players.forEach(p => {
+                    p.cards = p.cards.map(c => c % 2 === 0 ? Math.floor(Math.random() * 5) * 2 + 1 : Math.floor(Math.random() * 5) * 2);
+                });
+            }
+            if (card.id === 'panic_attack') {
+                gameState.timer = Math.floor(gameState.timer / 2);
+            }
+            if (card.id === 'slowpoke_bonus') {
+                gameState.slowpokeBonusActive = true;
+            }
+            if (card.id === 'time_extension') {
+                gameState.timer += 30;
+            }
+        }
+
+        function endRound() {
+            // 1. Calculate Base Points for each player
+            gameState.players.forEach(p => {
+                if (!p.submitted) {
+                    p.points = 0;
+                    return;
+                }
+                
+                if (gameState.golfRulesActive) {
+                    // Furthest gets 3, middle 2, closest 1
+                    const sortedDistances = gameState.players
+                        .filter(pl => pl.submitted)
+                        .map(pl => pl.distance)
+                        .sort((a, b) => b - a); // Furthest first
+                    
+                    if (p.distance === sortedDistances[0]) p.points = 3;
+                    else if (p.distance === sortedDistances[sortedDistances.length - 1]) p.points = 1;
+                    else p.points = 2;
+                } else {
+                    const dist = p.distance;
+                    p.points = dist === 0 ? 3 : (dist <= 5 ? 2 : (dist <= 10 ? 1 : 0));
+                }
+
+                if (gameState.doublePointsActive) p.points *= 2;
+            });
+
+            // 2. Determine Speed Bonus
+            // Eligible = scored base points (>0)
+            const eligible = gameState.submissions
+                .filter(s => {
+                    const p = gameState.players.find(pl => pl.id === s.playerId);
+                    return p && p.points > 0;
+                })
+                .sort((a, b) => a.timestamp - b.timestamp);
+
+            let speedBonusId = null;
+            if (eligible.length > 0) {
+                speedBonusId = gameState.slowpokeBonusActive 
+                    ? eligible[eligible.length - 1].playerId 
+                    : eligible[0].playerId;
+            }
+
+            // 3. Finalize and Display Results
+            let res = '<table class="score-table">';
+            gameState.players.forEach(p => {
+                let roundPoints = p.points;
+                let bonusText = '';
+                if (p.id === speedBonusId) {
+                    roundPoints += 1;
+                    bonusText = ' <span style="color:#e9c46a;">(+1 Speed!)</span>';
+                }
+                p.score += roundPoints;
+                res += `<tr>
+                    <td><span class="player-color-dot" style="background:${p.color.hex}"></span>${p.name}</td>
+                    <td>Answer: ${p.answer || 'N/A'} (Dist: ${p.distance || 0})</td>
+                    <td><strong>${p.points}</strong>${bonusText} = ${roundPoints} pts</td>
+                </tr>`;
+            });
+            res += '</table>';
+
+            // Reset trick flags for next round
+            gameState.golfRulesActive = false;
+            gameState.doublePointsActive = false;
+            gameState.slowpokeBonusActive = false;
+
+            document.getElementById('roundSummary').innerHTML = res;
+            document.getElementById('summaryModal').style.display = 'flex';
+            document.getElementById('nextRoundBtn').style.display = isHost ? 'block' : 'none';
+        }
+
+        function nextRound() {
+            sendAction({type: 'nextRound'});
+            gameState.currentRound++;
+            document.getElementById('summaryModal').style.display = 'none';
+            startNewRound();
+        }
+
+        function redrawCards() {
+            const t = getTrystero();
+            const myIdx = gameState.players.findIndex(p => p.p2pId === t.selfId);
+            const p = gameState.players[myIdx];
+            if (p.redraws <= 0 || p.submitted) return;
+            
+            p.redraws--;
+            p.cards = p.cards.map(() => Math.floor(Math.random() * 10));
+            window._sendRedraw({playerId: p.id, newCards: p.cards, remainingRedraws: p.redraws});
+            updateDisplay();
+        }
+
+        function scoutHand() {
+            const t = getTrystero();
+            const myIdx = gameState.players.findIndex(p => p.p2pId === t.selfId);
+            const p = gameState.players[myIdx];
+            if (p.redraws <= 0 || scoutedSelf) return;
+            
+            p.redraws--;
+            scoutedSelf = true;
+            window._sendRedraw({playerId: p.id, newCards: p.cards, remainingRedraws: p.redraws});
+            updateDisplay();
+        }
+
+        function spyOnPlayer(pIdx) {
+            const t = getTrystero();
+            const myIdx = gameState.players.findIndex(p => p.p2pId === t.selfId);
+            const me = gameState.players[myIdx];
+            const target = gameState.players[pIdx];
+            if (me.redraws <= 0 || spiedPlayers.has(target.id)) return;
+            
+            me.redraws--;
+            spiedPlayers.add(target.id);
+            window._sendRedraw({playerId: me.id, newCards: me.cards, remainingRedraws: me.redraws});
+            updateDisplay();
+        }
+
+        function showInstructions() {
+            document.getElementById('instructionsModal').style.display = 'flex';
+        }
+
+        function closeInstructions() { document.getElementById('instructionsModal').style.display = 'none'; }
+    </script>
+</body>
+</html>
