@@ -23,6 +23,10 @@ export default function Lobby({ gameState }: LobbyProps) {
         socket.emit('add_bot', { botType });
     };
 
+    const handleClearBots = () => {
+        socket.emit('clear_bots');
+    };
+
     const handleStart = () => {
         socket.emit('start_game', { scrambleTimeout });
     };
@@ -79,8 +83,11 @@ export default function Lobby({ gameState }: LobbyProps) {
                                 <option value="Bluffer">Bluffer</option>
                                 <option value="Scavenger">Scavenger</option>
                             </select>
-                            <button onClick={handleAddBot} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white font-semibold transition-colors">
+                            <button onClick={handleAddBot} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-white font-semibold transition-colors">
                                 Add
+                            </button>
+                            <button onClick={handleClearBots} className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded text-white font-semibold transition-colors">
+                                Clear
                             </button>
                         </div>
                     </div>

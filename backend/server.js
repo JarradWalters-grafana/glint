@@ -76,6 +76,10 @@ io.on('connection', (socket) => {
         gameEngine.addBotPlayer(botType);
     });
 
+    socket.on('clear_bots', () => {
+        gameEngine.clearBots();
+    });
+
     // Start Game
     socket.on('start_game', (options) => {
         gameEngine.startGame(options);

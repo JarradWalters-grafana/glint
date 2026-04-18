@@ -50,6 +50,17 @@ class Engine {
         this.broadcastState();
     }
 
+    clearBots() {
+        if (this.phase !== 'Lobby') return;
+        for (const [id, player] of this.players.entries()) {
+            if (player.isBot) {
+                this.players.delete(id);
+            }
+        }
+        this.botCount = 0;
+        this.broadcastState();
+    }
+
     removePlayer(id) {
         this.players.delete(id);
         const humanCount = Array.from(this.players.values()).filter(p => !p.isBot).length;
